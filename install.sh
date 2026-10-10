@@ -64,6 +64,71 @@ fetch_and_extract(){
   find "$src" -mindepth 1 -maxdepth 1 ! -name nrb.db ! -name __pycache__ ! -name venv -exec cp -a -t "$APP" -- {} +
   rm -rf "$tmp"
   [[ -f "$APP/nrb.py" && -f "$APP/requirements.txt" ]] || die "Panel files did not land in $APP."
+  # The published archive references activate_license.html from nrb.py but
+  # omits that template. Add it during install so /activate-license won't 500.
+  mkdir -p "$APP/templates"
+  if [[ ! -f "$APP/templates/activate_license.html" ]]; then
+    cat > "$APP/templates/activate_license.html" <<'HTML'
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Activate {{ panel_name|default('NRB PANEL') }}</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#0c111b;color:#eef2ff;font:16px system-ui,-apple-system,sans-serif}
+    main{width:min(100%,440px);padding:30px;border:1px solid #293449;border-radius:20px;background:#121a28;box-shadow:0 24px 80px #0006}
+    h1{margin:0 0 8px;font-size:26px}p{color:#aebbd0;line-height:1.55}.hint{font-size:13px}
+    label{display:block;margin:22px 0 8px;font-weight:600}input,button{width:100%;border-radius:10px;padding:13px;font:inherit}
+    input{background:#0b1220;color:#fff;border:1px solid #34425a}button{margin-top:14px;border:0;background:#3978f6;color:#fff;font-weight:700;cursor:pointer}
+    #message{min-height:24px;color:#ffb4b4;font-size:14px}button:disabled{opacity:.6}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Activate {{ panel_name|default('NRB PANEL') }}</h1>
+  <p>Enter the license key supplied by your panel administrator to continue.</p>
+  <form id="license-form" method="post" action="{{ url_for('activate_license_submit') }}">
+    <label for="license_key">License key</label>
+    <input id="license_key" name="license_key" type="password" autocomplete="off" required>
+    <button id="submit" type="submit">Activate license</button>
+    <p id="message" role="status" aria-live="polite"></p>
+  </form>
+  <p class="hint">If you do not have a license key, contact the provider of this panel.</p>
+</main>
+<script>
+document.getElementById('license-form').addEventListener('submit', async function(event) {
+  event.preventDefault();
+  const button = document.getElementById('submit');
+  const message = document.getElementById('message');
+  button.disabled = true; message.textContent = 'Checking license…';
+  try {
+    const response = await fetch(this.action, {
+      method: 'POST',
+      body: new FormData(this),
+      headers: {'X-Requested-With': 'XMLHttpRequest'}
+    });
+    const data = await response.json();
+    if (response.ok && data.success) {
+      message.style.color = '#86efac';
+      message.textContent = 'License activated. Opening panel…';
+      window.location.href = '/login';
+    } else {
+      message.style.color = '#ffb4b4';
+      message.textContent = data.error || 'License activation failed.';
+    }
+  } catch (error) {
+    message.textContent = 'Request failed. Please try again.';
+  } finally {
+    button.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
+HTML
+    log "Added missing templates/activate_license.html (archive omitted this required template)."
+  fi
   find "$APP" -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
   chmod +x "$APP/start.sh" "$APP/nrb-tool.sh" 2>/dev/null || true
   log "Source files installed into $APP"
