@@ -72,6 +72,14 @@ fetch_and_extract(){
 prepare_environment(){
   mkdir -p "$APP" "$BACKUPS"
   if [[ ! -f "$ENV_FILE" ]]; then
+    # Older generic-installer attempts may have copied the repository's bundled
+    # development database. Keep a copy, but don't silently deploy its accounts.
+    if [[ -f "$APP/nrb.db" ]] && ! systemctl cat "$SERVICE" >/dev/null 2>&1; then
+      local dbbackup="$BACKUPS/preinstall-database-$(date +%Y%m%d-%H%M%S).db"
+      cp -a "$APP/nrb.db" "$dbbackup"
+      rm -f "$APP/nrb.db" "$APP/nrb.db-wal" "$APP/nrb.db-shm"
+      log "Moved pre-existing database to $dbbackup so a fresh admin account can be created."
+    fi
     local admin_pass secret
     admin_pass="$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
     secret="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
@@ -79,7 +87,7 @@ prepare_environment(){
 HOST=0.0.0.0
 PORT=$PORT
 DEBUG_MODE=False
-PANEL_NAME=SNCK HVM
+PANEL_NAME="SNCK HVM"
 SECRET_KEY=$secret
 MAIN_ADMIN_USERNAME=admin
 MAIN_ADMIN_PASSWORD=$admin_pass
