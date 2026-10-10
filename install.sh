@@ -116,6 +116,7 @@ write_service(){
   getent group docker >/dev/null 2>&1 || groupadd docker
   usermod -aG docker snckhvm
   chown -R snckhvm:snckhvm "$ROOT"
+  [[ ! -f "$ROOT/INITIAL-ADMIN-CREDENTIALS.txt" ]] || chown root:root "$ROOT/INITIAL-ADMIN-CREDENTIALS.txt"
   chmod 600 "$ENV_FILE"
   cat > "$UNIT" <<EOF
 [Unit]
